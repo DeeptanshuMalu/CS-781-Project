@@ -60,6 +60,7 @@ lib = getLib()
 
 print("Error table")
 print(falsifier.error_table.table)
+falsifier.error_table.table.to_csv("counterexample_images/error_table.csv")
 print("Results of error table analysis")
 print("Random samples from error table")
 for i, sample in enumerate(falsifier.error_analysis.random_samples):
@@ -86,6 +87,7 @@ for k in falsifier.error_analysis.k_clusters.keys():
 print("PCA analysis")
 print("PCA pivot: ", falsifier.error_analysis.pca['pivot'])
 print("Directions: ", falsifier.error_analysis.pca['directions'])
+print("Columns", falsifier.error_analysis.pca['columns'])
 
 
 # To save all samples: uncomment this
