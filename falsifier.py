@@ -86,11 +86,11 @@ analysis_params.k_clusters_params.k = 4
 falsifier.analyze_error_table(analysis_params=analysis_params)
 lib = getLib()
 
-if args.num_cars == 0:
-    subdir_name = "1"
-else:
-    subdir_name = "2"
-save_dir = f"data/train/iteration_{args.iteration_num}/{subdir_name}"
+# if args.num_cars == 0:
+#     subdir_name = "1"
+# else:
+#     subdir_name = "2"
+save_dir = f"data/train/iteration_{args.iteration_num}/{args.num_cars}"
 os.makedirs(save_dir, exist_ok=True)
 
 print("Error table")
