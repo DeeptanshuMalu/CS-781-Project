@@ -7,6 +7,8 @@ import cv2
 import argparse
 import os
 
+device = "cuda" if torch.cuda.is_available() else "cpu"
+
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -22,20 +24,27 @@ def parse_args():
 # Parse arguments
 args = parse_args()
 
+# Load the PyTorch model
+from model.pytorch_model import CarDetectorModel, convert_tf_to_pytorch
 
-# Determine device
-if torch.cuda.is_available():
-    device = "cuda"
-else:
-    device = "cpu"
+model = CarDetectorModel(n_classes=2)
+model_path = (
+    f"./data/checkpoints/iteration_{args.iteration_num}/car-detector-pytorch-model.pth"
+)
+if not os.path.exists(model_path):
+    print(f"Model path {model_path} does not exist. Please run train.py first.")
+    exit(1)
+model.load_state_dict(torch.load(model_path, map_location=device))
+model.to(device)
+model.eval()
+
 
 print(f"Loading model on {device}")
 
 
-
 # Load and preprocess test image
-image_path = f"data/train/iteration_{args.iteration_num}/1/random_3.png"
-# image_path = f"data/train/iteration_{args.iteration_num}/1/kclosest_0.png"
+# image_path = f"data/train/iteration_{args.iteration_num}/1/random_3.png"
+image_path = f"data/train/iteration_{args.iteration_num}/1/kclosest_0.png"
 if not os.path.exists(image_path):
     # Create a dummy image for testing
     image = np.random.randint(0, 255, (128, 128, 3), dtype=np.uint8)
@@ -58,29 +67,30 @@ except Exception as e:
     exit(1)
 
 # TENSORFLOW MODEL TESTING -----------------------------
-import tensorflow as tf
-from model.modelNN import Model
+# import tensorflow as tf
+# from model.modelNN import Model
 
-graph_path = (
-    f"./data/checkpoints/iteration_{args.iteration_num}/car-detector-model.meta"
-)
-checkpoint_path = f"./data/checkpoints/iteration_{args.iteration_num}/"
-sess = tf.compat.v1.Session()
-nn = Model()
-nn.init(graph_path, checkpoint_path, sess)
-print("tf pred:", nn.predict(np.array(image)))
+# graph_path = (
+#     f"./data/checkpoints/iteration_{args.iteration_num}/car-detector-model.meta"
+# )
+# checkpoint_path = f"./data/checkpoints/iteration_{args.iteration_num}/"
+# sess = tf.compat.v1.Session()
+# tf_model = Model()
+# tf_model.init(graph_path, checkpoint_path, sess)
+# print("TF output:", tf_model.predict(np.array(image)))
 # TENSORFLOW MODEL TESTING ---------------------------------
 
 # Create tensor with proper shape [batch, channels, height, width]
 image_tensor = torch.tensor(image, device=device, dtype=torch.float32).unsqueeze(0)
+# Ensure the tensor is contiguous
+image_tensor = image_tensor.contiguous()
 print(f"Input image shape: {image_tensor.shape}")
 
 # Test the model first
 with torch.no_grad():
     test_output = model(image_tensor)
     # print(f"Test output shape: {test_output.shape}")
-    print(f"Test softmax: {torch.softmax(test_output, dim=1)}")
-    print(f"Test output: {test_output}")
+    print(f"Torch output: {torch.softmax(test_output, dim=1)}")
     predicted_class = torch.argmax(test_output, dim=1)
     # print(f"Predicted class: {predicted_class.item()}")
 
@@ -98,7 +108,7 @@ bounded_image = BoundedTensor(image_tensor, ptb)
 
 # Get model prediction
 prediction = bounded_model(bounded_image)
-print("Model prediction:", prediction)
+assert torch.allclose(test_output, prediction, atol=1e-5), "Outputs do not match!"
 
 print("Computing bounds using CROWN method...")
 with torch.no_grad():

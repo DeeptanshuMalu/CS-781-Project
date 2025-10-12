@@ -7,22 +7,14 @@ from model.pytorch_model import CarDetectorModel, convert_tf_to_pytorch
 import tensorflow.compat.v1 as tf
 import torch
 import torch.nn as nn
-import torch.optim as optim
-import torch.nn.functional as F
-import time
-from datetime import timedelta
-import math
-import random
-import numpy as np
 import argparse
 import os
-import traceback
 
 # Adding seed so that random initialization is consistent
-# from numpy.random import seed
-# seed(1)
-# from tensorflow import set_random_seed
-# set_random_seed(2)
+from numpy.random import seed
+seed(1)
+from tensorflow.compat.v1 import set_random_seed
+set_random_seed(2)
 
 
 def parse_args():
@@ -57,7 +49,9 @@ batchSize = args.batch_size
 
 # Training paths and model parameters
 checkPointName = f"data/checkpoints/iteration_{args.iteration_num}/car-detector-model"
-pytorch_checkPointName = f"data/checkpoints/iteration_{args.iteration_num}/car-detector-pytorch-model.pth"
+pytorch_checkPointName = (
+    f"data/checkpoints/iteration_{args.iteration_num}/car-detector-pytorch-model.pth"
+)
 trainPath = f"data/train/iteration_{args.iteration_num}/"
 os.makedirs(f"data/checkpoints/iteration_{args.iteration_num}", exist_ok=True)
 os.makedirs(trainPath, exist_ok=True)
@@ -143,16 +137,18 @@ def train(numIteration):
     saver.save(session, checkPointName)
     print(f"TensorFlow model saved to {checkPointName}")
 
-    # # After TensorFlow training is complete, convert and save PyTorch model
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    # pytorch_model = CarDetectorModel(n_classes=len(classes)).to(device)
-    
-    # # Convert TensorFlow weights to PyTorch
-    # pytorch_model = convert_tf_to_pytorch(session, tf.get_default_graph(), pytorch_model)
-    
-    # # Save PyTorch model
-    # torch.save(pytorch_model.state_dict(), pytorch_checkPointName)
-    # print(f"PyTorch model saved to {pytorch_checkPointName}")
+    # After TensorFlow training is complete, convert and save PyTorch model
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    pytorch_model = CarDetectorModel(n_classes=len(classes)).to(device)
+
+    # Convert TensorFlow weights to PyTorch
+    pytorch_model = convert_tf_to_pytorch(
+        session, tf.get_default_graph(), pytorch_model
+    )
+
+    # Save PyTorch model
+    torch.save(pytorch_model.state_dict(), pytorch_checkPointName)
+    print(f"PyTorch model saved to {pytorch_checkPointName}")
 
 
 train(numIteration=args.num_iterations)
