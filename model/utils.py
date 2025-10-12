@@ -2,7 +2,7 @@ import cv2, os
 import numpy as np
 
 import matplotlib.image as mpimg
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
 IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS = 66, 200, 3
 INPUT_SHAPE = (IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_CHANNELS)
@@ -121,29 +121,20 @@ def random_brightness(image):
     return cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
 
-def augument(data_dir,
-             center,
-             left,
-             right,
-             steering_angle,
-             range_x=100,
-             range_y=10):
+def augument(data_dir, center, left, right, steering_angle, range_x=100, range_y=10):
     """
     Generate an augumented image and adjust steering angle.
     (The steering angle is associated with the center image)
     """
-    image, steering_angle = choose_image(data_dir, center, left, right,
-                                         steering_angle)
+    image, steering_angle = choose_image(data_dir, center, left, right, steering_angle)
     image, steering_angle = random_flip(image, steering_angle)
-    image, steering_angle = random_translate(image, steering_angle, range_x,
-                                             range_y)
+    image, steering_angle = random_translate(image, steering_angle, range_x, range_y)
     image = random_shadow(image)
     image = random_brightness(image)
     return image, steering_angle
 
 
-def batch_generator(data_dir, image_paths, steering_angles, batch_size,
-                    is_training):
+def batch_generator(data_dir, image_paths, steering_angles, batch_size, is_training):
     """
     Generate training image give image paths and associated steering angles
     """
@@ -156,8 +147,9 @@ def batch_generator(data_dir, image_paths, steering_angles, batch_size,
             steering_angle = steering_angles[index]
             # argumentation
             if is_training and np.random.rand() < 0.6:
-                image, steering_angle = augument(data_dir, center, left, right,
-                                                 steering_angle)
+                image, steering_angle = augument(
+                    data_dir, center, left, right, steering_angle
+                )
             else:
                 image = load_image(data_dir, center)
             # add the image and steering angle to the batch
@@ -177,23 +169,25 @@ def createBiases(size):
     return tf.Variable(tf.constant(0.05, shape=[size]))
 
 
-def createConvolutionalLayer(input, numInputChannels, convFilterSize,
-                             numFilters):
-    '''Create a convolutional layer + max pool + relu activation'''
+def createConvolutionalLayer(input, numInputChannels, convFilterSize, numFilters):
+    """Create a convolutional layer + max pool + relu activation"""
 
     # Trainable weights and biases
     weights = createWeights(
-        shape=[convFilterSize, convFilterSize, numInputChannels, numFilters])
+        shape=[convFilterSize, convFilterSize, numInputChannels, numFilters]
+    )
     biases = createBiases(numFilters)
 
     # Create the convolutional layer
     layer = tf.nn.conv2d(
-        input=input, filter=weights, strides=[1, 1, 1, 1], padding='SAME')
+        input=input, filter=weights, strides=[1, 1, 1, 1], padding="SAME"
+    )
     layer += biases
 
     # Max-pooling.
     layer = tf.nn.max_pool(
-        value=layer, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='SAME')
+        value=layer, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding="SAME"
+    )
 
     # Relu activation function
     layer = tf.nn.relu(layer)
@@ -202,7 +196,7 @@ def createConvolutionalLayer(input, numInputChannels, convFilterSize,
 
 
 def createFlattenLayer(layer):
-    '''Flatten layer of dimension  [batch_size img_size img_size num_channels] to single column tensor'''
+    """Flatten layer of dimension  [batch_size img_size img_size num_channels] to single column tensor"""
 
     layerShape = layer.get_shape()
     numFeatures = layerShape[1:4].num_elements()
@@ -214,9 +208,9 @@ def createFlattenLayer(layer):
 
 
 def createFcLayer(input, numInputs, numOutputs, useRelu=True):
-    '''Create fully connected layer'''
+    """Create fully connected layer"""
 
-    #Trainable weights and biases
+    # Trainable weights and biases
     weights = createWeights(shape=[numInputs, numOutputs])
     biases = createBiases(numOutputs)
 

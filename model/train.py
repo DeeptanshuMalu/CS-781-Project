@@ -1,14 +1,17 @@
 """Model trainer"""
 
 from model import dataset, utils
-from model.model import Model
+from model.modelNN import Model
 
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 import time
 from datetime import timedelta
 import math
 import random
 import numpy as np
+import argparse
+import os
+import traceback
 
 # Adding seed so that random initialization is consistent
 # from numpy.random import seed
@@ -16,24 +19,54 @@ import numpy as np
 # from tensorflow import set_random_seed
 # set_random_seed(2)
 
-batchSize = 32
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--batch_size", type=int, default=1, help="Batch size for training"
+    )
+    parser.add_argument(
+        "--num_iterations", type=int, default=50, help="Number of training iterations"
+    )
+    parser.add_argument(
+        "--lr", type=float, default=1e-4, help="Learning rate for optimizer"
+    )
+    parser.add_argument(
+        "--validation_size",
+        type=float,
+        default=0.2,
+        help="Proportion of data to use for validation",
+    )
+    parser.add_argument(
+        "--iteration_num",
+        type=int,
+        default=1,
+        help="Iteration number of the re-training process",
+    )
+    return parser.parse_args()
+
+
+args = parse_args()
+
+batchSize = args.batch_size
 
 
 # Training paths and model parameters
-checkPointName = 'data/checkpoint/car-detector-model'
-trainPath = 'data/train/'
-classes = ['1', '2']   # training folder names
+checkPointName = f"data/checkpoints/iteration_{args.iteration_num}/car-detector-model"
+trainPath = f"data/train/iteration_{args.iteration_num}/"
+os.makedirs(f"data/checkpoints/iteration_{args.iteration_num}", exist_ok=True)
+os.makedirs(trainPath, exist_ok=True)
+classes = ["1", "2"]  # training folder names
 imgSize = 128
 numChannels = 3
 
 # Validation %
-validationSize = 0.2
+validationSize = args.validation_size
 
 
 # Load training and validation images and labels
 
-data = dataset.readTrainSets(
-    trainPath, imgSize, classes, validationSize=validationSize)
+data = dataset.readTrainSets(trainPath, imgSize, classes, validationSize=validationSize)
 
 print("Complete reading input data. Will Now print a snippet of it")
 print("Number of files in Training-set:\t\t{}".format(len(data.train.labels)))
@@ -43,15 +76,27 @@ session = tf.Session()
 
 # Get model graph
 nn = Model()
+if args.iteration_num == 1:
+    nn.init(
+        "data/car_detector/checkpoint/car-detector-model.meta",
+        "data/car_detector/checkpoint",
+        session,
+    )
+else:
+    nn.init(
+        f"data/checkpoints/iteration_{args.iteration_num - 1}/car-detector-model.meta",
+        f"data/checkpoints/iteration_{args.iteration_num - 1}/",
+        session,
+    )
+
 x, layerFc2, yTrue, yTrueCls, yPred, yPredCls = nn.getGraph(len(classes))
 
 session.run(tf.global_variables_initializer())
 
 # Training functions
-crossEntropy = tf.nn.softmax_cross_entropy_with_logits(
-    logits=layerFc2, labels=yTrue)
+crossEntropy = tf.nn.softmax_cross_entropy_with_logits(logits=layerFc2, labels=yTrue)
 cost = tf.reduce_mean(crossEntropy)
-optimizer = tf.train.AdamOptimizer(learning_rate=1e-4).minimize(cost)
+optimizer = tf.train.AdamOptimizer(learning_rate=args.lr).minimize(cost)
 correct_prediction = tf.equal(yPredCls, yTrueCls)
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
 
@@ -59,7 +104,7 @@ session.run(tf.global_variables_initializer())
 
 
 def showProgress(epoch, feedDictTrain, feedDictValidate, valLoss):
-    '''Show progress while training'''
+    """Show progress while training"""
     acc = session.run(accuracy, feed_dict=feedDictTrain)
     val_acc = session.run(accuracy, feed_dict=feedDictValidate)
     msg = "Training Epoch {0} --- Training Accuracy: {1:>6.1%}, Validation Accuracy: {2:>6.1%},  Validation Loss: {3:.3f}"
@@ -72,7 +117,7 @@ saver = tf.train.Saver()
 
 
 def train(numIteration):
-    '''Training loop'''
+    """Training loop"""
 
     global totalIterations
 
@@ -97,5 +142,9 @@ def train(numIteration):
 
     totalIterations += numIteration
 
+    # Final save after training
+    saver.save(session, checkPointName)
+    print(f"Model saved to {checkPointName}")
 
-train(numIteration=5000)
+
+train(numIteration=args.num_iterations)

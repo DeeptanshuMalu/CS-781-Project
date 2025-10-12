@@ -13,17 +13,18 @@ def loadTrain(trainPath, imageSize, classes):
     imgNames = []
     cls = []
 
-    print('Going to read training images')
+    print("Going to read training images")
     for fields in classes:
         index = classes.index(fields)
-        print('Now going to read {} files (Index: {})'.format(fields, index))
-        path = os.path.join(trainPath, fields, '*g')
+        print("Now going to read {} files (Index: {})".format(fields, index))
+        path = os.path.join(trainPath, fields, "*g")
         files = glob.glob(path)
         for fl in files:
             image = cv2.imread(fl)
             try:
-                image = cv2.resize(image, (imageSize, imageSize), 0, 0,
-                                   cv2.INTER_LINEAR)
+                image = cv2.resize(
+                    image, (imageSize, imageSize), 0, 0, cv2.INTER_LINEAR
+                )
                 image = image.astype(np.float32)
                 image = np.multiply(image, 1.0 / 255.0)
                 images.append(image)
@@ -34,7 +35,7 @@ def loadTrain(trainPath, imageSize, classes):
                 imgNames.append(flbase)
                 cls.append(fields)
             except:
-                print('Issue with: ' + fl)
+                print("Issue with: " + fl)
     images = np.array(images)
     labels = np.array(labels)
     imgNames = np.array(imgNames)
@@ -92,8 +93,12 @@ class DataSet(object):
             assert batchSize <= self._numExamples
         end = self._indexInEpoch
 
-        return self._images[start:end], self._labels[
-            start:end], self._imgNames[start:end], self._cls[start:end]
+        return (
+            self._images[start:end],
+            self._labels[start:end],
+            self._imgNames[start:end],
+            self._cls[start:end],
+        )
 
 
 def readTrainSets(trainPath, imageSize, classes, validationSize):
@@ -118,9 +123,9 @@ def readTrainSets(trainPath, imageSize, classes, validationSize):
     trainImgNames = imgNames[validationSize:]
     trainCls = cls[validationSize:]
 
-    data_sets.train = DataSet(trainImages, trainLabels, trainImgNames,
-                              trainCls)
-    data_sets.valid = DataSet(validationImages, validationLabels,
-                              validationImgNames, validationCls)
+    data_sets.train = DataSet(trainImages, trainLabels, trainImgNames, trainCls)
+    data_sets.valid = DataSet(
+        validationImages, validationLabels, validationImgNames, validationCls
+    )
 
     return data_sets

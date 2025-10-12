@@ -1,13 +1,13 @@
 import sys, getopt
 import cv2
-import tensorflow as tf
+import tensorflow.compat.v1 as tf
 
-from model.model import Model
+from model.modelNN import Model
 import matplotlib.image as mpimg
 
-GRAPH_PATH = './data/checkpoint/car-detector-model.meta'
-CHECKPOINT_PATH = './data/checkpoint/'
-IMAGE_PATH = './data/test/test.jpg'
+GRAPH_PATH = "./data/checkpoint/car-detector-model.meta"
+CHECKPOINT_PATH = "./data/checkpoint/"
+IMAGE_PATH = "./data/test/test.jpg"
 
 
 with tf.Session() as sess:
