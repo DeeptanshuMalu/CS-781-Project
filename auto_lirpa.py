@@ -31,7 +31,6 @@ else:
 
 print(f"Loading model on {device}")
 
-# Create PyTorch model
 
 
 # Load and preprocess test image

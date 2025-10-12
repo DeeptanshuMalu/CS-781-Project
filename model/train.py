@@ -2,8 +2,13 @@
 
 from model import dataset, utils
 from model.modelNN import Model
+from model.pytorch_model import CarDetectorModel, convert_tf_to_pytorch
 
 import tensorflow.compat.v1 as tf
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
 import time
 from datetime import timedelta
 import math
@@ -50,9 +55,9 @@ args = parse_args()
 
 batchSize = args.batch_size
 
-
 # Training paths and model parameters
 checkPointName = f"data/checkpoints/iteration_{args.iteration_num}/car-detector-model"
+pytorch_checkPointName = f"data/checkpoints/iteration_{args.iteration_num}/car-detector-pytorch-model.pth"
 trainPath = f"data/train/iteration_{args.iteration_num}/"
 os.makedirs(f"data/checkpoints/iteration_{args.iteration_num}", exist_ok=True)
 os.makedirs(trainPath, exist_ok=True)
@@ -63,9 +68,7 @@ numChannels = 3
 # Validation %
 validationSize = args.validation_size
 
-
 # Load training and validation images and labels
-
 data = dataset.readTrainSets(trainPath, imgSize, classes, validationSize=validationSize)
 
 print("Complete reading input data. Will Now print a snippet of it")
@@ -74,7 +77,6 @@ print("Number of files in Validation-set:\t{}".format(len(data.valid.labels)))
 
 session = tf.Session()
 
-# Get model graph
 nn = Model()
 if args.iteration_num == 1:
     nn.init(
@@ -93,7 +95,6 @@ x, layerFc2, yTrue, yTrueCls, yPred, yPredCls = nn.getGraph(len(classes))
 
 session.run(tf.global_variables_initializer())
 
-# Training functions
 crossEntropy = tf.nn.softmax_cross_entropy_with_logits(logits=layerFc2, labels=yTrue)
 cost = tf.reduce_mean(crossEntropy)
 optimizer = tf.train.AdamOptimizer(learning_rate=args.lr).minimize(cost)
@@ -104,10 +105,9 @@ session.run(tf.global_variables_initializer())
 
 
 def showProgress(epoch, feedDictTrain, feedDictValidate, valLoss):
-    """Show progress while training"""
     acc = session.run(accuracy, feed_dict=feedDictTrain)
     val_acc = session.run(accuracy, feed_dict=feedDictValidate)
-    msg = "Training Epoch {0} --- Training Accuracy: {1:>6.1%}, Validation Accuracy: {2:>6.1%},  Validation Loss: {3:.3f}"
+    msg = "Training Epoch {0} --- Training Accuracy: {1:>6.1%}, Validation Accuracy: {2:>6.1%}, Validation Loss: {3:.3f}"
     print(msg.format(epoch + 1, acc, val_acc, valLoss))
 
 
@@ -117,13 +117,11 @@ saver = tf.train.Saver()
 
 
 def train(numIteration):
-    """Training loop"""
 
     global totalIterations
 
     for i in range(totalIterations, totalIterations + numIteration):
 
-        # Fecth batch
         xBatch, yTrueBatch, _, _ = data.train.nextBatch(batchSize)
         xValidBatch, yValidBatch, _, _ = data.valid.nextBatch(batchSize)
 
@@ -132,7 +130,6 @@ def train(numIteration):
 
         session.run(optimizer, feed_dict=feedDictTr)
 
-        # Show progress and save learnt parameters
         if i % int(data.train.num_examples / batchSize) == 0:
             valLoss = session.run(cost, feed_dict=feedDictVal)
             epoch = int(i / int(data.train.num_examples / batchSize))
@@ -142,9 +139,20 @@ def train(numIteration):
 
     totalIterations += numIteration
 
-    # Final save after training
+    # Save TensorFlow model
     saver.save(session, checkPointName)
-    print(f"Model saved to {checkPointName}")
+    print(f"TensorFlow model saved to {checkPointName}")
+
+    # # After TensorFlow training is complete, convert and save PyTorch model
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # pytorch_model = CarDetectorModel(n_classes=len(classes)).to(device)
+    
+    # # Convert TensorFlow weights to PyTorch
+    # pytorch_model = convert_tf_to_pytorch(session, tf.get_default_graph(), pytorch_model)
+    
+    # # Save PyTorch model
+    # torch.save(pytorch_model.state_dict(), pytorch_checkPointName)
+    # print(f"PyTorch model saved to {pytorch_checkPointName}")
 
 
 train(numIteration=args.num_iterations)
