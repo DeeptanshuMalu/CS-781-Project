@@ -12,18 +12,20 @@ import os
 
 # Adding seed so that random initialization is consistent
 from numpy.random import seed
+
 seed(1)
 from tensorflow.compat.v1 import set_random_seed
+
 set_random_seed(2)
 
 
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--batch_size", type=int, default=1, help="Batch size for training"
+        "--batch_size", type=int, default=32, help="Batch size for training"
     )
     parser.add_argument(
-        "--num_iterations", type=int, default=50, help="Number of training iterations"
+        "--num_iterations", type=int, default=500, help="Number of training iterations"
     )
     parser.add_argument(
         "--lr", type=float, default=1e-4, help="Learning rate for optimizer"
@@ -72,7 +74,23 @@ print("Number of files in Validation-set:\t{}".format(len(data.valid.labels)))
 session = tf.Session()
 
 nn = Model()
-if args.iteration_num == 1:
+x, layerFc2, yTrue, yTrueCls, yPred, yPredCls = nn.getGraph(len(classes))
+
+session.run(tf.global_variables_initializer())
+
+crossEntropy = tf.nn.softmax_cross_entropy_with_logits(logits=layerFc2, labels=yTrue)
+cost = tf.reduce_mean(crossEntropy)
+optimizer = tf.train.AdamOptimizer(learning_rate=args.lr).minimize(cost)
+correct_prediction = tf.equal(yPredCls, yTrueCls)
+accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
+
+totalIterations = 0
+
+saver = tf.train.Saver()
+
+session.run(tf.global_variables_initializer())
+
+if args.iteration_num == 1 or args.iteration_num == 0:
     nn.init(
         "data/car_detector/checkpoint/car-detector-model.meta",
         "data/car_detector/checkpoint",
@@ -85,18 +103,6 @@ else:
         session,
     )
 
-x, layerFc2, yTrue, yTrueCls, yPred, yPredCls = nn.getGraph(len(classes))
-
-session.run(tf.global_variables_initializer())
-
-crossEntropy = tf.nn.softmax_cross_entropy_with_logits(logits=layerFc2, labels=yTrue)
-cost = tf.reduce_mean(crossEntropy)
-optimizer = tf.train.AdamOptimizer(learning_rate=args.lr).minimize(cost)
-correct_prediction = tf.equal(yPredCls, yTrueCls)
-accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32))
-
-session.run(tf.global_variables_initializer())
-
 
 def showProgress(epoch, feedDictTrain, feedDictValidate, valLoss):
     acc = session.run(accuracy, feed_dict=feedDictTrain)
@@ -105,33 +111,29 @@ def showProgress(epoch, feedDictTrain, feedDictValidate, valLoss):
     print(msg.format(epoch + 1, acc, val_acc, valLoss))
 
 
-totalIterations = 0
-
-saver = tf.train.Saver()
-
-
 def train(numIteration):
 
     global totalIterations
 
-    for i in range(totalIterations, totalIterations + numIteration):
+    if args.iteration_num > 0:
+        for i in range(totalIterations, totalIterations + numIteration):
 
-        xBatch, yTrueBatch, _, _ = data.train.nextBatch(batchSize)
-        xValidBatch, yValidBatch, _, _ = data.valid.nextBatch(batchSize)
+            xBatch, yTrueBatch, _, _ = data.train.nextBatch(batchSize)
+            xValidBatch, yValidBatch, _, _ = data.valid.nextBatch(batchSize)
 
-        feedDictTr = {x: xBatch, yTrue: yTrueBatch}
-        feedDictVal = {x: xValidBatch, yTrue: yValidBatch}
+            feedDictTr = {x: xBatch, yTrue: yTrueBatch}
+            feedDictVal = {x: xValidBatch, yTrue: yValidBatch}
 
-        session.run(optimizer, feed_dict=feedDictTr)
+            session.run(optimizer, feed_dict=feedDictTr)
 
-        if i % int(data.train.num_examples / batchSize) == 0:
-            valLoss = session.run(cost, feed_dict=feedDictVal)
-            epoch = int(i / int(data.train.num_examples / batchSize))
+            if i % int(data.train.num_examples / batchSize) == 0:
+                valLoss = session.run(cost, feed_dict=feedDictVal)
+                epoch = int(i / int(data.train.num_examples / batchSize))
 
-            showProgress(epoch, feedDictTr, feedDictVal, valLoss)
-            saver.save(session, checkPointName)
+                showProgress(epoch, feedDictTr, feedDictVal, valLoss)
+                saver.save(session, checkPointName)
 
-    totalIterations += numIteration
+        totalIterations += numIteration
 
     # Save TensorFlow model
     saver.save(session, checkPointName)

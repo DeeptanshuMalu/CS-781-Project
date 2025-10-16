@@ -28,26 +28,6 @@ class CarDetectorModel(nn.Module):
         self.fc1 = nn.Linear(self.fc_input_size, 128)
         self.fc2 = nn.Linear(128, n_classes)
 
-        # Initialize weights to match TF behavior
-        self._initialize_weights()
-
-    def _initialize_weights(self):
-        """Initialize weights similar to TF truncated normal with stddev=0.05"""
-        for m in self.modules():
-            if isinstance(m, nn.Conv2d):
-                # TF uses truncated normal with stddev=0.05
-                nn.init.normal_(m.weight, mean=0.0, std=0.05)
-                # Clamp to simulate truncated normal (within 2 std devs)
-                with torch.no_grad():
-                    m.weight.clamp_(-0.1, 0.1)
-                # TF uses constant 0.05 for biases
-                nn.init.constant_(m.bias, 0.05)
-            elif isinstance(m, nn.Linear):
-                nn.init.normal_(m.weight, mean=0.0, std=0.05)
-                with torch.no_grad():
-                    m.weight.clamp_(-0.1, 0.1)
-                nn.init.constant_(m.bias, 0.05)
-
     def forward(self, x):
         # Conv layer 1 + MaxPool + ReLU (matching TF createConvolutionalLayer)
         x = self.conv1(x)
@@ -65,8 +45,7 @@ class CarDetectorModel(nn.Module):
         x = F.relu(x)
 
         # Flatten layer (matching TF createFlattenLayer)
-        # Use contiguous() before reshape to ensure memory layout compatibility
-        x = x.contiguous().view(x.size(0), -1)
+        x = x.view(x.size(0), -1)
 
         # FC layer 1 + ReLU (matching TF createFcLayer with useRelu=True)
         x = self.fc1(x)
@@ -76,30 +55,6 @@ class CarDetectorModel(nn.Module):
         x = self.fc2(x)
 
         return x
-
-    def predict(self, image):
-        """Predict single image (matching TF model's predict method)"""
-        # Preprocessing to match TF model
-        pix = Image.fromarray(image, "RGB")
-        pix = pix.resize((self.img_size, self.img_size), Image.Resampling.LANCZOS)
-        image = np.array(pix)
-
-        # Normalize
-        image = image.astype(np.float32) / 255.0
-
-        # Convert to tensor and add batch dimension
-        image_tensor = torch.from_numpy(image).permute(2, 0, 1).unsqueeze(0)
-
-        # Set model to evaluation mode
-        self.eval()
-        with torch.no_grad():
-            logits = self.forward(image_tensor)
-            # Apply softmax to get probabilities (matching TF model)
-            probabilities = F.softmax(logits, dim=1)
-            predictions = torch.argmax(probabilities, dim=1)
-
-        return predictions.numpy()
-
 
 def convert_tf_to_pytorch(tf_session, tf_graph, pytorch_model):
     """Convert TensorFlow weights to PyTorch model"""

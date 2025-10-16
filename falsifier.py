@@ -8,7 +8,9 @@ from renderer.kittiLib import getLib
 import pickle
 import argparse
 import os
+import shutil
 from tqdm import tqdm
+import json
 
 
 def parse_args():
@@ -48,7 +50,7 @@ def parse_args():
         default=1,
     )
     parser.add_argument(
-        "--num_images", type=int, help="Number of images to be generated", default=5
+        "--num_images", type=int, help="Number of images to be generated", default=10
     )
     parser.add_argument(
         "--sample_types",
@@ -121,16 +123,21 @@ falsifier = generic_falsifier(
 falsifier.run_falsifier()
 
 analysis_params = DotMap()
-analysis_params.k_closest_params.k = args.num_images
 analysis_params.random_params.count = args.num_images
+analysis_params.k_closest_params.k = args.num_images
 analysis_params.pca = True
 analysis_params.k_clusters_params.k = 4
 falsifier.analyze_error_table(analysis_params=analysis_params)
 lib = getLib()
 
-
-save_dir = f"data/train/iteration_{args.iteration_num}/{args.num_cars}"
-os.makedirs(save_dir, exist_ok=True)
+if args.iteration_num == 0:
+    save_dir = f"data/test/{args.num_cars}"
+    shutil.rmtree(save_dir, ignore_errors=True)
+    os.makedirs(save_dir, exist_ok=True)
+else:
+    save_dir = f"data/train/iteration_{args.iteration_num}/{args.num_cars}"
+    shutil.rmtree(save_dir, ignore_errors=True)
+    os.makedirs(save_dir, exist_ok=True)
 
 print("Error table")
 print(falsifier.error_table.table)
@@ -146,6 +153,7 @@ if args.sample_types == "random":
         img, _ = genImage(lib, sample)
         img.save(f"{save_dir}/" + str(i) + ".png")
         # img.show()
+
 elif args.sample_types == "kclosest":
     print("k closest samples from error table")
     for i, sample in tqdm(
@@ -178,6 +186,15 @@ best_columns = [
 ]
 print(f"Best {args.num_best_features} features: ", best_columns, best_features_indexes)
 
+with open(f"{save_dir}/best_features.json", "w") as f:
+    json.dump(best_columns, f)
 
 # To save all samples: uncomment this
 # pickle.dump(falsifier.samples, open("generated_samples.pickle", "wb"))
+# print(falsifier.samples)
+# for i in falsifier.samples:
+#     print(falsifier.samples[i])
+#     img, _ = genImage(lib, falsifier.samples[i])
+#     img.save(f"test.png")
+#     # img.show()
+#     break
