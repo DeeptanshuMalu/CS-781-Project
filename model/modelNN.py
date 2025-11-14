@@ -27,7 +27,7 @@ class Model:
         """Predict single image"""
 
         # Resize image to desired size and preprocessing done during training
-        imageSize = 128
+        imageSize = 32
         numChannels = 3
         images = []
         # image = cv2.resize(image, (imageSize, imageSize), cv2.INTER_LINEAR)
@@ -60,7 +60,8 @@ class Model:
     def getGraph(self, nClasses):
         """Get computation graph (neural netwrok architecture)"""
 
-        imgSize = 128
+        # Reduced input size and smaller filter counts to get ~10-20k params.
+        imgSize = 32
         numChannels = 3
 
         x = tf.placeholder(
@@ -71,20 +72,20 @@ class Model:
         yTrue = tf.placeholder(tf.float32, shape=[None, nClasses], name="yTrue")
         yTrueCls = tf.argmax(yTrue, dimension=1)
 
-        # Network graph params
+        # Network graph params (kept small)
         filterSizeConv1 = 3
-        numFiltersConv1 = 32
+        numFiltersConv1 = 8
 
         filterSizeConv2 = 3
-        numFiltersConv2 = 32
+        numFiltersConv2 = 16
 
         filterSizeConv3 = 3
-        numFiltersConv3 = 64
+        numFiltersConv3 = 32  # smaller to keep total params within target
 
-        fcLayerSize = 128
+        fcLayerSize = 32  # small fully-connected layer
 
-        # Netwok graph
-
+        # Network graph
+        # (32x32x3) -> (16x16x8) Params: (3*3*3)*8 + 8 = 224
         layerConv1 = utils.createConvolutionalLayer(
             input=x,
             numInputChannels=numChannels,
@@ -92,6 +93,7 @@ class Model:
             numFilters=numFiltersConv1,
         )
 
+        # (16x16x8) -> (8x8x16) Params: (3*3*8)*16 + 16 = 1168
         layerConv2 = utils.createConvolutionalLayer(
             input=layerConv1,
             numInputChannels=numFiltersConv1,
@@ -99,6 +101,7 @@ class Model:
             numFilters=numFiltersConv2,
         )
 
+        # (8x8x16) -> (4x4x32) Params: (3*3*16)*32 + 32 = 4640
         layerConv3 = utils.createConvolutionalLayer(
             input=layerConv2,
             numInputChannels=numFiltersConv2,
@@ -106,18 +109,22 @@ class Model:
             numFilters=numFiltersConv3,
         )
 
-        layerFlat = utils.createFlattenLayer(layerConv3)
+        # Normal flattening (explicit reshape)
+        layerShape = layerConv3.get_shape()
+        numFeatures = layerShape[1:4].num_elements()
+        layerFlat = tf.reshape(layerConv3, [-1, numFeatures])
 
+        # Small fully connected layers
         layerFc1 = utils.createFcLayer(
             input=layerFlat,
-            numInputs=layerFlat.get_shape()[1:4].num_elements(),
+            numInputs=numFeatures,
             numOutputs=fcLayerSize,
             useRelu=True,
-        )
+        ) # Params: (4*4*32)*32 + 32 = 16384
 
         layerFc2 = utils.createFcLayer(
             input=layerFc1, numInputs=fcLayerSize, numOutputs=nClasses, useRelu=False
-        )
+        ) # Params: (32*2) + 2 = 66
 
         yPred = tf.nn.softmax(layerFc2, name="yPred")
         yPredCls = tf.argmax(yPred, dimension=1)
