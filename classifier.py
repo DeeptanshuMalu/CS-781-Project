@@ -22,7 +22,10 @@ def parse_args():
         "--iteration_num",
         type=int,
         help="Iteration number of re-training process",
-        default=1,
+        default=0,
+    )
+    parser.add_argument(
+        "--port", type=int, help="Port number for server", default=8888
     )
     return parser.parse_args()
 
@@ -42,7 +45,8 @@ class Classifier(Client):
     def simulate(self, sample):
         img, _ = genImage(self.lib, sample)
         yTrue = len(sample.cars)
-        yPred = np.argmax(self.nn.predict(np.array(img))[0]) + 1
+        yPred = np.argmax(self.nn.predict(np.array(img))[0])
+        # yPred = np.argmax(self.nn.predict(np.array(img))[0]) + 1
         res = {}
         res["yTrue"] = yTrue
         res["yPred"] = yPred
@@ -50,16 +54,16 @@ class Classifier(Client):
         return res
 
 
-PORT = 8888
-BUFSIZE = 4096
 
 args = parse_args()
+BUFSIZE = 4096
+PORT = args.port
 
 classifier_data = DotMap()
 classifier_data.port = PORT
 classifier_data.bufsize = BUFSIZE
 
-if args.iteration_num == 1:
+if args.iteration_num == 0:
     classifier_data.graph_path = (
         "./data/car_detector/checkpoint/car-detector-model.meta"
     )

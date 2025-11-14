@@ -11,7 +11,9 @@ import os
 import shutil
 from tqdm import tqdm
 import json
+import random
 
+random.seed(42)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -21,7 +23,7 @@ def parse_args():
     parser.add_argument("--yPos_l", type=float, help="Lower bound of yPos", default=0)
     parser.add_argument("--yPos_u", type=float, help="Upper bound of yPos", default=1)
     parser.add_argument(
-        "--num_cars", type=int, help="Number of cars", default=1, choices=[1, 2]
+        "--num_cars", type=int, help="Number of cars", default=1
     )
     parser.add_argument(
         "--brightness_l", type=float, help="Lower bound of brightness", default=0.5
@@ -47,10 +49,10 @@ def parse_args():
         "--iteration_num",
         type=int,
         help="Iteration number of re-training process",
-        default=1,
+        default=0,
     )
     parser.add_argument(
-        "--num_images", type=int, help="Number of images to be generated", default=10
+        "--num_images", type=int, help="Number of images to be generated", default=200
     )
     parser.add_argument(
         "--sample_types",
@@ -64,6 +66,9 @@ def parse_args():
         type=int,
         help="Number of best features to be returned",
         default=2,
+    )
+    parser.add_argument(
+        "--port", type=int, help="Port number for server", default=8888
     )
 
     return parser.parse_args()
@@ -92,6 +97,8 @@ space = FeatureSpace(
         "color": Feature(Box([args.color_l, args.color_u])),
     }
 )
+
+print("Sampling space:", space)
 sampler = FeatureSampler.randomSamplerFor(space)
 
 
@@ -104,7 +111,7 @@ class confidence_spec(specification_monitor):
 
 
 MAX_ITERS = 3 * args.num_images
-PORT = 8888
+PORT = args.port
 MAXREQS = 5
 BUFSIZE = 4096
 
@@ -130,71 +137,113 @@ analysis_params.k_clusters_params.k = 4
 falsifier.analyze_error_table(analysis_params=analysis_params)
 lib = getLib()
 
-if args.iteration_num == 0:
-    save_dir = f"data/test/{args.num_cars}"
-    shutil.rmtree(save_dir, ignore_errors=True)
-    os.makedirs(save_dir, exist_ok=True)
-else:
+if args.iteration_num != 0:
     save_dir = f"data/train/iteration_{args.iteration_num}/{args.num_cars}"
     shutil.rmtree(save_dir, ignore_errors=True)
     os.makedirs(save_dir, exist_ok=True)
 
-print("Error table")
-print(falsifier.error_table.table)
-falsifier.error_table.table.to_csv(f"{save_dir}/error_table.csv")
-print("Results of error table analysis")
-if args.sample_types == "random":
-    print("Random samples from error table")
-    for i, sample in tqdm(
-        enumerate(falsifier.error_analysis.random_samples),
-        total=len(falsifier.error_analysis.random_samples),
-    ):
+    print("Error table")
+    print(falsifier.error_table.table)
+    falsifier.error_table.table.to_csv(f"{save_dir}/error_table.csv")
+    print("Results of error table analysis")
+    if args.sample_types == "random":
+        print("Random samples from error table")
+        num_orig_imgs = len(falsifier.error_analysis.random_samples)
+        for i, sample in tqdm(
+            enumerate(falsifier.error_analysis.random_samples),
+            total=num_orig_imgs,
+        ):
+            # print(sample)
+            img, _ = genImage(lib, sample)
+            img.save(f"{save_dir}/" + str(i) + ".png")
+            # img.show()
+
+    elif args.sample_types == "kclosest":
+        print("k closest samples from error table")
+        num_orig_imgs = len(falsifier.error_analysis.k_closest_samples)
+        for i, sample in tqdm(
+            enumerate(falsifier.error_analysis.k_closest_samples),
+            total=num_orig_imgs,
+        ):
+            # print(sample)
+            img, _ = genImage(lib, sample)
+            img.save(f"{save_dir}/" + str(i) + ".png")
+            # img.show()
+
+    orig_imgs = os.listdir(f"data/train/iteration_0/{args.num_cars}/")
+    random.shuffle(orig_imgs)
+    selected_orig_imgs = orig_imgs[: num_orig_imgs]
+    for orig_train_img in selected_orig_imgs:
+        shutil.copy(
+            f"data/train/iteration_0/{args.num_cars}/{orig_train_img}",
+            f"{save_dir}/orig_{orig_train_img}",
+        )
+
+    # print("k means clustering centroids from error table")
+    # print("Centroids for the categorical parts of the sample")
+    # print(falsifier.error_analysis.k_clusters.keys())
+
+    # print("Centroids for the numerical parts of the sample for each discrete cluster")
+    # for k in falsifier.error_analysis.k_clusters.keys():
+    #     print(falsifier.error_analysis.k_clusters[k])
+
+    print("PCA analysis")
+    print("PCA pivot: ", falsifier.error_analysis.pca["pivot"])
+    print("Directions: ", falsifier.error_analysis.pca["directions"])
+    print("Columns", falsifier.error_analysis.pca["columns"])
+
+    # best_features_indexes = np.argsort(
+    #     np.abs(falsifier.error_analysis.pca["directions"][0])
+    # )
+    best_features_indexes = np.argsort(
+        np.abs(falsifier.error_analysis.pca["directions"][0])
+    )[-args.num_best_features :]
+    best_columns = [
+        falsifier.error_analysis.pca["columns"][i] for i in best_features_indexes
+    ]
+    print(f"Best {args.num_best_features} features: ", best_columns, best_features_indexes)
+
+    with open(f"{save_dir}/best_features.json", "w") as f:
+        json.dump(best_columns, f)
+
+else:
+    # To save all samples: uncomment this
+    # print(falsifier.samples)
+    # pickle.dump(falsifier.samples, open("generated_samples.pickle", "wb"))
+    test_size = 50
+    shutil.rmtree(f"data/train/iteration_{args.iteration_num}/{args.num_cars}", ignore_errors=True)
+    shutil.rmtree(f"data/test/{args.num_cars}", ignore_errors=True)
+    os.makedirs(f"data/train/iteration_{args.iteration_num}/{args.num_cars}", exist_ok=True)
+    os.makedirs(f"data/test/{args.num_cars}", exist_ok=True)
+    
+    all_test_samples_dict = {}
+    for i in tqdm(falsifier.samples, total=MAX_ITERS):
+        sample = falsifier.samples[i]
         # print(sample)
-        img, _ = genImage(lib, sample)
-        img.save(f"{save_dir}/" + str(i) + ".png")
-        # img.show()
+        img, _ = genImage(lib, falsifier.samples[i])
 
-elif args.sample_types == "kclosest":
-    print("k closest samples from error table")
-    for i, sample in tqdm(
-        enumerate(falsifier.error_analysis.k_closest_samples),
-        total=len(falsifier.error_analysis.k_closest_samples),
-    ):
-        # print(sample)
-        img, _ = genImage(lib, sample)
-        img.save(f"{save_dir}/" + str(i) + ".png")
-        # img.show()
+        if i < test_size:
+            all_test_samples_dict[i] = {
+                "backgroundID": sample.backgroundID.item(),
+                "cars": [
+                    {
+                        "xPos": car.xPos[0],
+                        "yPos": car.yPos[0],
+                        "carID": car.carID.item(),
+                    }
+                    for car in sample.cars
+                ],
+                "brightness": sample.brightness[0],
+                "sharpness": sample.sharpness[0],
+                "contrast": sample.contrast[0],
+                "color": sample.color[0],
+            }
+            img.save(f"data/test/{args.num_cars}/{i}.png")
+            # img.show()
+        else:
+            img.save(f"data/train/iteration_{args.iteration_num}/{args.num_cars}/{i}.png")
+            # img.show()
 
-# print("k means clustering centroids from error table")
-# print("Centroids for the categorical parts of the sample")
-# print(falsifier.error_analysis.k_clusters.keys())
-
-# print("Centroids for the numerical parts of the sample for each discrete cluster")
-# for k in falsifier.error_analysis.k_clusters.keys():
-#     print(falsifier.error_analysis.k_clusters[k])
-
-print("PCA analysis")
-print("PCA pivot: ", falsifier.error_analysis.pca["pivot"])
-print("Directions: ", falsifier.error_analysis.pca["directions"])
-print("Columns", falsifier.error_analysis.pca["columns"])
-
-best_features_indexes = np.argsort(
-    np.abs(falsifier.error_analysis.pca["directions"][0])
-)[-args.num_best_features :]
-best_columns = [
-    falsifier.error_analysis.pca["columns"][i] for i in best_features_indexes
-]
-print(f"Best {args.num_best_features} features: ", best_columns, best_features_indexes)
-
-with open(f"{save_dir}/best_features.json", "w") as f:
-    json.dump(best_columns, f)
-
-# To save all samples: uncomment this
-# pickle.dump(falsifier.samples, open("generated_samples.pickle", "wb"))
-# print(falsifier.samples)
-# for i in falsifier.samples:
-#     print(falsifier.samples[i])
-#     img, _ = genImage(lib, falsifier.samples[i])
-#     img.save(f"test.png")
-#     # img.show()
-#     break
+    # print(all_test_samples_dict[0])
+    with open(f"data/test/{args.num_cars}/all_test_samples.json", "w") as f:
+        json.dump(all_test_samples_dict, f, indent=4)
