@@ -65,9 +65,9 @@ classifier_data.bufsize = BUFSIZE
 
 if args.iteration_num == 0:
     classifier_data.graph_path = (
-        "./data/car_detector/checkpoint/car-detector-model.meta"
+        "./data/dummy_model/car-detector-model.meta"
     )
-    classifier_data.checkpoint_path = "./data/car_detector/checkpoint/"
+    classifier_data.checkpoint_path = "./data/dummy_model/"
 else:
     classifier_data.graph_path = (
         f"./data/checkpoints/iteration_{args.iteration_num - 1}/car-detector-model.meta"
