@@ -3,7 +3,7 @@
 ## Setup
 Run the following to setup the project
 ```bash
-pip install -r requirememnts.txt
+pip install -r requirements.txt
 pip install git+https://github.com/KaidiXu/auto_LiRPA.git
 ```
 
