@@ -5,6 +5,7 @@ import os
 import glob
 from sklearn.utils import shuffle
 import numpy as np
+from PIL import Image
 
 
 def loadTrain(trainPath, imageSize, classes):
@@ -21,10 +22,13 @@ def loadTrain(trainPath, imageSize, classes):
         files = glob.glob(path)
         for fl in files:
             image = cv2.imread(fl)
+            image = Image.fromarray(image, "RGB")
             try:
-                image = cv2.resize(
-                    image, (imageSize, imageSize), 0, 0, cv2.INTER_LINEAR
-                )
+                # image = cv2.resize(
+                #     image, (imageSize, imageSize), 0, 0, cv2.INTER_LINEAR
+                # )
+                image = image.resize((imageSize, imageSize), Image.Resampling.LANCZOS)
+                image = np.array(image)
                 image = image.astype(np.float32)
                 image = np.multiply(image, 1.0 / 255.0)
                 images.append(image)
@@ -90,7 +94,7 @@ class DataSet(object):
             start = 0
             self._indexInEpoch = batchSize
 
-            assert batchSize <= self._numExamples
+            # assert batchSize <= self._numExamples
         end = self._indexInEpoch
 
         return (

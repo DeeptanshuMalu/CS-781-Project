@@ -13,6 +13,8 @@ import argparse
 import os
 import numpy as np
 from tqdm import tqdm
+import random
+import shutil
 
 # Adding seed for consistent initialization
 torch.manual_seed(42)
@@ -20,8 +22,6 @@ np.random.seed(42)
 if torch.cuda.is_available():
     torch.cuda.manual_seed(42)
 
-from numpy.random import seed
-seed(1)
 from tensorflow.compat.v1 import set_random_seed
 set_random_seed(2)
 
@@ -32,7 +32,7 @@ def parse_args():
         "--batch_size", type=int, default=32, help="Batch size for training"
     )
     parser.add_argument(
-        "--num_epochs", type=int, default=10, help="Number of training epochs"
+        "--num_epochs", type=int, default=5, help="Number of training epochs"
     )
     parser.add_argument(
         "--lr", type=float, default=1e-3, help="Learning rate for optimizer"
@@ -48,6 +48,17 @@ def parse_args():
         type=int,
         default=0,
         help="Iteration number of the re-training process",
+    )
+    parser.add_argument(
+        "--train_size",
+        type=int,
+        default=200,
+        help="Number of training samples per class",
+    )
+    parser.add_argument(
+        "--normal_training",
+        action="store_true",
+        help="Flag to indicate normal training without re-training iterations",
     )
     return parser.parse_args()
 
@@ -118,20 +129,47 @@ def convert_pytorch_to_tf(pytorch_model, tf_session, classes, imgSize):
 
 def train_pytorch_model():
     args = parse_args()
+    random.seed(args.iteration_num + 42)
+    normal_str = "_normal" if args.normal_training else ""
     
     # Training paths and model parameters
     pytorch_checkPointName = (
-        f"data/checkpoints/iteration_{args.iteration_num}/car-detector-pytorch-model.pth"
+        f"data{normal_str}/checkpoints/iteration_{args.iteration_num}/car-detector-pytorch-model.pth"
     )
-    tf_checkPointName = f"data/checkpoints/iteration_{args.iteration_num}/car-detector-model"
-    trainPath = f"data/train/iteration_{args.iteration_num}/"
-    os.makedirs(f"data/checkpoints/iteration_{args.iteration_num}", exist_ok=True)
+    tf_checkPointName = f"data{normal_str}/checkpoints/iteration_{args.iteration_num}/car-detector-model"
+    trainPath = f"data{normal_str}/train/iteration_{args.iteration_num}/"
+    os.makedirs(f"data{normal_str}/checkpoints/iteration_{args.iteration_num}", exist_ok=True)
     os.makedirs(trainPath, exist_ok=True)
     
     classes = ["0", "1"]
     imgSize = 32
     numChannels = 3
     validationSize = args.validation_size
+
+    for num_cars in ['0', '1']:
+        os.makedirs(trainPath + f"{num_cars}/", exist_ok=True)
+        # num_orig_imgs_other_class = len([i for i in os.listdir(trainPath + f"{1-int(num_cars)}/") if i.endswith((".png", ".jpg"))])
+        dump_imgs = os.listdir(f"data{normal_str}/train_dump/{num_cars}/")
+        random.shuffle(dump_imgs)
+        orig_imgs = [i for i in os.listdir(trainPath + f"{num_cars}/") if i.endswith((".png", ".jpg"))]
+        random.shuffle(orig_imgs)
+        num_orig_imgs = len(orig_imgs)
+        if args.normal_training:
+            selected_orig_imgs = dump_imgs[: args.train_size - 0]
+        else:
+            # selected_orig_imgs = orig_imgs[: args.train_size-num_orig_imgs]
+            if num_orig_imgs >= args.train_size // 2:
+                for orig_train_img in orig_imgs[args.train_size // 2:]:
+                    os.remove(trainPath + f"{num_cars}/" + orig_train_img)
+                selected_orig_imgs = dump_imgs[: args.train_size // 2]
+            else:
+                selected_orig_imgs = dump_imgs[: args.train_size - num_orig_imgs]
+            # selected_orig_imgs = dump_imgs[: max(num_orig_imgs, num_orig_imgs_other_class)-num_orig_imgs]
+        for orig_train_img in selected_orig_imgs:
+            shutil.copy(
+                f"data{normal_str}/train_dump/{num_cars}/{orig_train_img}",
+                trainPath + f"{num_cars}/orig_{orig_train_img}",
+            )
 
     # Load training and validation data
     data = dataset.readTrainSets(trainPath, imgSize, classes, validationSize=validationSize)
@@ -149,7 +187,7 @@ def train_pytorch_model():
     if args.iteration_num != 0:
         # Load previous iteration model weights
         previous_model_path = (
-            f"./data/checkpoints/iteration_{args.iteration_num - 1}/car-detector-pytorch-model.pth"
+            f"./data{normal_str}/checkpoints/iteration_{args.iteration_num - 1}/car-detector-pytorch-model.pth"
         )
         model.load_state_dict(torch.load(previous_model_path, map_location=device))
         print(f"Loaded model weights from {previous_model_path}")
@@ -225,21 +263,20 @@ def train_pytorch_model():
               f"Train Loss: {avg_train_loss:.4f}, Train Acc: {train_acc:.2f}%, "
               f"Val Loss: {avg_val_loss:.4f}, Val Acc: {val_acc:.2f}%")
         
-        # Early stopping
-        if avg_val_loss < best_val_loss:
-            best_val_loss = avg_val_loss
-            patience_counter = 0
-            # Save best model
-            torch.save(model.state_dict(), pytorch_checkPointName)
-        else:
-            patience_counter += 1
-            if patience_counter >= patience:
-                print(f"Early stopping at epoch {epoch+1}. "
-                      f"Validation loss did not improve for {patience} consecutive epochs.")
-                break
+        # # Early stopping
+        # if avg_val_loss < best_val_loss:
+        #     best_val_loss = avg_val_loss
+        #     patience_counter = 0
+        #     # Save best model
+        #     torch.save(model.state_dict(), pytorch_checkPointName)
+        # else:
+        #     patience_counter += 1
+        #     if patience_counter >= patience:
+        #         print(f"Early stopping at epoch {epoch+1}. "
+        #               f"Validation loss did not improve for {patience} consecutive epochs.")
+        #         break
     
     # Load best model
-    model.load_state_dict(torch.load(pytorch_checkPointName))
     torch.save(model.state_dict(), pytorch_checkPointName)
     print(f"PyTorch model saved to {pytorch_checkPointName}")
     

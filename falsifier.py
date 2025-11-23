@@ -11,9 +11,6 @@ import os
 import shutil
 from tqdm import tqdm
 import json
-import random
-
-random.seed(42)
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -137,8 +134,8 @@ analysis_params.k_clusters_params.k = 4
 falsifier.analyze_error_table(analysis_params=analysis_params)
 lib = getLib()
 
+save_dir = f"data/train/iteration_{args.iteration_num}/{args.num_cars}"
 if args.iteration_num != 0:
-    save_dir = f"data/train/iteration_{args.iteration_num}/{args.num_cars}"
     shutil.rmtree(save_dir, ignore_errors=True)
     os.makedirs(save_dir, exist_ok=True)
 
@@ -170,14 +167,14 @@ if args.iteration_num != 0:
             img.save(f"{save_dir}/" + str(i) + ".png")
             # img.show()
 
-    orig_imgs = os.listdir(f"data/train/iteration_0/{args.num_cars}/")
-    random.shuffle(orig_imgs)
-    selected_orig_imgs = orig_imgs[: num_orig_imgs]
-    for orig_train_img in selected_orig_imgs:
-        shutil.copy(
-            f"data/train/iteration_0/{args.num_cars}/{orig_train_img}",
-            f"{save_dir}/orig_{orig_train_img}",
-        )
+    # orig_imgs = os.listdir(f"data/train_dump/{args.num_cars}/")
+    # random.shuffle(orig_imgs)
+    # selected_orig_imgs = orig_imgs[: args.num_images-num_orig_imgs]
+    # for orig_train_img in selected_orig_imgs:
+    #     shutil.copy(
+    #         f"data/train_dump/{args.num_cars}/{orig_train_img}",
+    #         f"{save_dir}/orig_{orig_train_img}",
+    #     )
 
     # print("k means clustering centroids from error table")
     # print("Centroids for the categorical parts of the sample")
@@ -197,6 +194,7 @@ if args.iteration_num != 0:
     # )
     best_features_indexes = np.argsort(
         np.abs(falsifier.error_analysis.pca["directions"][0])
+    # )[:args.num_best_features]
     )[-args.num_best_features :]
     best_columns = [
         falsifier.error_analysis.pca["columns"][i] for i in best_features_indexes
@@ -211,9 +209,9 @@ else:
     # print(falsifier.samples)
     # pickle.dump(falsifier.samples, open("generated_samples.pickle", "wb"))
     test_size = 50
-    shutil.rmtree(f"data/train/iteration_{args.iteration_num}/{args.num_cars}", ignore_errors=True)
+    shutil.rmtree(f"data/train_dump/{args.num_cars}", ignore_errors=True)
     shutil.rmtree(f"data/test/{args.num_cars}", ignore_errors=True)
-    os.makedirs(f"data/train/iteration_{args.iteration_num}/{args.num_cars}", exist_ok=True)
+    os.makedirs(f"data/train_dump/{args.num_cars}", exist_ok=True)
     os.makedirs(f"data/test/{args.num_cars}", exist_ok=True)
     
     all_test_samples_dict = {}
@@ -241,9 +239,18 @@ else:
             img.save(f"data/test/{args.num_cars}/{i}.png")
             # img.show()
         else:
-            img.save(f"data/train/iteration_{args.iteration_num}/{args.num_cars}/{i}.png")
+            img.save(f"data/train_dump/{args.num_cars}/{i}.png")
             # img.show()
 
     # print(all_test_samples_dict[0])
     with open(f"data/test/{args.num_cars}/all_test_samples.json", "w") as f:
         json.dump(all_test_samples_dict, f, indent=4)
+
+    # orig_imgs = os.listdir(f"data/train_dump/{args.num_cars}/")
+    # random.shuffle(orig_imgs)
+    # selected_orig_imgs = orig_imgs[: args.num_images]
+    # for orig_train_img in selected_orig_imgs:
+    #     shutil.copy(
+    #         f"data/train_dump/{args.num_cars}/{orig_train_img}",
+    #         f"{save_dir}/orig_{orig_train_img}",
+    #     )

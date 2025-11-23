@@ -207,4 +207,4 @@ marimo/_lsp/
 __marimo__/
 
 data/
-!data/car_detector/checkpoint/
+data_normal/
