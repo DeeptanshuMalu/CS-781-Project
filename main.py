@@ -6,6 +6,7 @@ import argparse
 import shutil
 import os
 
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
 
 def get_free_port():
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)

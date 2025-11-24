@@ -194,8 +194,8 @@ if args.iteration_num != 0:
     # )
     best_features_indexes = np.argsort(
         np.abs(falsifier.error_analysis.pca["directions"][0])
-    # )[:args.num_best_features]
-    )[-args.num_best_features :]
+    )[:args.num_best_features]
+    # )[-args.num_best_features :]
     best_columns = [
         falsifier.error_analysis.pca["columns"][i] for i in best_features_indexes
     ]
